@@ -1,29 +1,72 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "taskboard.fullname" . }}-backend
+  name: {{ include "opsdesk.fullname" . }}-backend
+  labels:
+    app: opsdesk-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.backend.replicaCount }}
   selector:
-    matchLabels: {app: taskboard-backend}
+    matchLabels:
+      app: opsdesk-backend
   template:
     metadata:
-      labels: {app: taskboard-backend}
+      labels:
+        app: opsdesk-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "opsdesk.name" . }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: backend
           image: "{{ .Values.backend.image }}:{{ .Values.backend.tag }}"
-          ports: [{containerPort: 8000}]
+          imagePullPolicy: {{ .Values.backend.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
           env:
             - name: DATABASE_URL
-              value: "postgresql+psycopg://{{ .Values.postgres.username }}:{{ .Values.postgres.password }}@{{ .Values.postgres.host }}:5432/{{ .Values.postgres.database }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.secretKeys.databaseURL }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
-            httpGet: {path: /ready, port: 8000}
-            initialDelaySeconds: 10
+            httpGet:
+              path: /ready
+              port: http
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
           livenessProbe:
-            httpGet: {path: /health, port: 8000}
-            initialDelaySeconds: 20
+            httpGet:
+              path: /health
+              port: http
             periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}

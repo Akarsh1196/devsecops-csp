@@ -1,42 +1,117 @@
 apiVersion: v1
-kind: Secret
-metadata: {name: taskboard-postgres}
-type: Opaque
-stringData:
-  username: {{ .Values.postgres.username | quote }}
-  password: {{ .Values.postgres.password | quote }}
----
-apiVersion: v1
 kind: Service
-metadata: {name: taskboard-postgres}
+metadata:
+  name: {{ include "opsdesk.fullname" . }}-postgres
+  labels:
+    app: opsdesk-postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
 spec:
-  selector: {app: taskboard-postgres}
-  ports: [{port: 5432, targetPort: 5432}]
+  type: ClusterIP
+  selector:
+    app: opsdesk-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: taskboard-postgres}
+metadata:
+  name: {{ include "opsdesk.fullname" . }}-postgres
+  labels:
+    app: opsdesk-postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
 spec:
   replicas: 1
-  selector: {matchLabels: {app: taskboard-postgres}}
+  selector:
+    matchLabels:
+      app: opsdesk-postgres
   template:
-    metadata: {labels: {app: taskboard-postgres}}
+    metadata:
+      labels:
+        app: opsdesk-postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "opsdesk.name" . }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-      - name: postgres
-        image: postgres:16-alpine
-        ports: [{containerPort: 5432}]
-        env:
-        - {name: POSTGRES_DB, value: "{{ .Values.postgres.database }}"}
-        - {name: POSTGRES_USER, valueFrom: {secretKeyRef: {name: taskboard-postgres, key: username}}}
-        - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: taskboard-postgres, key: password}}}
-        readinessProbe: {exec: {command: ["sh","-c","pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]}, initialDelaySeconds: 5, periodSeconds: 10}
-        volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
-      volumes: [{name: data, persistentVolumeClaim: {claimName: taskboard-postgres-data}}]
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          imagePullPolicy: IfNotPresent
+          # The official image needs its root entrypoint to initialize and
+          # chown the mounted volume before it drops to the postgres user.
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.secretKeys.username }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.secretKeys.password }}
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.postgresResources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "opsdesk.fullname" . }}-postgres-data
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: taskboard-postgres-data}
+metadata:
+  name: {{ include "opsdesk.fullname" . }}-postgres-data
+  labels:
+    app: opsdesk-postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
 spec:
-  accessModes: [ReadWriteOnce]
-  resources: {requests: {storage: 5Gi}}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}

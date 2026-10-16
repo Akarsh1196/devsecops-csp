@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opsdesk
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: opsdesk
+    app.kubernetes.io/part-of: devsecops-csp
+spec:
+  project: default
+  source:
+    # Replace both placeholders before applying this template.
+    repoURL: https://github.com/REPLACE_WITH_OWNER/REPLACE_WITH_REPOSITORY.git
+    targetRevision: main
+    path: helm/taskboard
+    helm:
+      valueFiles:
+        - values-prod.yaml
+      parameters:
+        - name: backend.image
+          value: ghcr.io/REPLACE_WITH_OWNER/opsdesk-backend
+        - name: frontend.image
+          value: ghcr.io/REPLACE_WITH_OWNER/opsdesk-frontend
+        - name: backend.tag
+          value: REPLACE_WITH_COMMIT_SHA
+        - name: frontend.tag
+          value: REPLACE_WITH_COMMIT_SHA
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opsdesk
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

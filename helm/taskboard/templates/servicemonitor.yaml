@@ -2,12 +2,15 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "taskboard.fullname" . }}-backend
+  name: {{ include "opsdesk.fullname" . }}-backend
   labels:
     release: kube-prometheus-stack
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
 spec:
   selector:
-    matchLabels: {app: taskboard-backend}
+    matchLabels:
+      app: opsdesk-backend
   endpoints:
     - port: http
       path: /metrics

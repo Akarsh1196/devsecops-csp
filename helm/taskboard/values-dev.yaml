@@ -1,6 +1,12 @@
-replicaCount: 1
+frontend:
+  replicaCount: 2
+
+backend:
+  replicaCount: 2
+
 ingress:
   enabled: true
-  host: taskboard.local
+  host: opsdesk.local
+
 hpa:
   enabled: false

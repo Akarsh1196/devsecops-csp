@@ -1,6 +1,17 @@
 grafana:
   enabled: true
+  defaultDashboardsEnabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
 prometheus:
   prometheusSpec:
     serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
     serviceMonitorNamespaceSelector: {}
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    retention: 7d

@@ -3,6 +3,8 @@
 node_modules/
 dist/
 target/
+.venv/
+*.egg-info/
 *.log
 .env
 .terraform/
@@ -14,3 +16,5 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.db
+.pytest_cache/
+.DS_Store

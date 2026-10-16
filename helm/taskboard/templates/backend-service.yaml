@@ -1,11 +1,39 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "taskboard.fullname" . }}-backend
-  labels: {app: taskboard-backend}
+  name: {{ include "opsdesk.fullname" . }}-backend
+  labels:
+    app: opsdesk-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
 spec:
-  selector: {app: taskboard-backend}
+  type: ClusterIP
+  selector:
+    app: opsdesk-backend
   ports:
-    - port: 8000
-      targetPort: 8000
-      name: http
+    - name: http
+      port: {{ .Values.backend.service.port }}
+      targetPort: http
+      protocol: TCP
+---
+# The frontend image is also used directly behind the Compose-compatible
+# Nginx proxy. This alias keeps the same upstream name available in-cluster;
+# the Ingress still routes external /api traffic to the release-scoped Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/component: backend-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "opsdesk.name" . }}
+spec:
+  type: ClusterIP
+  selector:
+    app: opsdesk-backend
+  ports:
+    - name: http
+      port: {{ .Values.backend.service.port }}
+      targetPort: http
+      protocol: TCP

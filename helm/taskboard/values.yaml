@@ -1,28 +1,60 @@
+fullnameOverride: ""
+
 frontend:
-  image: ghcr.io/YOUR_ORG/taskboard-frontend
-  tag: latest
+  image: ghcr.io/your-org/opsdesk-frontend
+  tag: sha-placeholder
+  pullPolicy: IfNotPresent
+  replicaCount: 2
+  service:
+    port: 8080
+
 backend:
-  image: ghcr.io/YOUR_ORG/taskboard-backend
-  tag: latest
-replicaCount: 2
-namespace: taskboard
+  image: ghcr.io/your-org/opsdesk-backend
+  tag: sha-placeholder
+  pullPolicy: IfNotPresent
+  replicaCount: 2
+  service:
+    port: 8000
+
 imagePullSecrets: []
+
 postgres:
-  host: taskboard-postgres
-  database: taskboard
-  username: taskboard
-  password: taskboard
+  database: opsdesk
+  existingSecret: opsdesk-postgres
+  secretKeys:
+    databaseURL: database-url
+    username: username
+    password: password
+  image: postgres:16-alpine
+  storage: 5Gi
+
 ingress:
   enabled: false
-  host: taskboard.local
+  className: nginx
+  host: opsdesk.local
+
 hpa:
   enabled: true
   minReplicas: 2
   maxReplicas: 6
   targetCPUUtilizationPercentage: 60
+
 resources:
-  requests: {cpu: 100m, memory: 256Mi}
-  limits: {cpu: 500m, memory: 512Mi}
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+postgresResources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
 monitoring:
   serviceMonitor:
-    enabled: true
+    enabled: false
