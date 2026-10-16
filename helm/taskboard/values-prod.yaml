@@ -11,6 +11,9 @@ ingress:
 hpa:
   enabled: true
 
+postgres:
+  storageClassName: gp3
+
 monitoring:
   serviceMonitor:
     enabled: true

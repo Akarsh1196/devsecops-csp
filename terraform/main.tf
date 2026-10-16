@@ -33,10 +33,20 @@ module "eks" {
 
   eks_managed_node_groups = {
     main = {
-      instance_types = ["t3.medium"]
+      instance_types = [var.node_instance_type]
       min_size       = 2
       max_size       = 4
-      desired_size   = 2
+      desired_size   = 4
+
+      iam_role_additional_policies = {
+        ebs_csi = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+      }
+    }
+  }
+
+  cluster_addons = {
+    aws-ebs-csi-driver = {
+      most_recent = true
     }
   }
 

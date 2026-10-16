@@ -21,6 +21,7 @@ imagePullSecrets: []
 postgres:
   database: opsdesk
   existingSecret: opsdesk-postgres
+  storageClassName: ""
   secretKeys:
     databaseURL: database-url
     username: username

@@ -58,6 +58,8 @@ spec:
           env:
             - name: POSTGRES_DB
               value: {{ .Values.postgres.database | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
@@ -115,3 +117,6 @@ spec:
   resources:
     requests:
       storage: {{ .Values.postgres.storage }}
+  {{- with .Values.postgres.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
