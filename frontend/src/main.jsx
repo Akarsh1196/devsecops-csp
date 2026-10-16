@@ -1,23 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import {
+  filterIncidents,
+  formatStatus,
+  formatTimeAgo,
+  getInitials,
+  PRIORITY_META,
+  STATUS_META,
+} from './utils.js';
 
 const API = '/api';
 const STATUSES = ['ALL', 'OPEN', 'IN_PROGRESS', 'RESOLVED'];
 const PRIORITIES = ['ALL', 'HIGH', 'MEDIUM', 'LOW'];
 const INITIAL_STATS = { total: 0, open: 0, inProgress: 0, resolved: 0 };
-
-const STATUS_META = {
-  OPEN: { label: 'Open', className: 'open', action: 'Start work', next: 'IN_PROGRESS' },
-  IN_PROGRESS: { label: 'In progress', className: 'progress', action: 'Resolve', next: 'RESOLVED' },
-  RESOLVED: { label: 'Resolved', className: 'resolved', action: 'Reopen', next: 'OPEN' },
-};
-
-const PRIORITY_META = {
-  HIGH: { label: 'High', className: 'high' },
-  MEDIUM: { label: 'Medium', className: 'medium' },
-  LOW: { label: 'Low', className: 'low' },
-};
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, options);
@@ -35,34 +31,6 @@ async function request(path, options = {}) {
 
   if (response.status === 204) return null;
   return response.json();
-}
-
-function formatStatus(status) {
-  return STATUS_META[status]?.label || status?.replace('_', ' ') || 'Unknown';
-}
-
-function formatTimeAgo(value) {
-  if (!value) return 'Recently';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Recently';
-
-  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-  if (seconds < 60) return 'Just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function getInitials(name) {
-  const safeName = name?.trim() || 'Unassigned';
-  if (safeName.toLowerCase() === 'unassigned') return '—';
-  return safeName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
 }
 
 function Icon({ name, size = 18 }) {
@@ -138,14 +106,7 @@ function App() {
   }, [loadData]);
 
   const visibleTasks = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return tasks.filter((task) => {
-      const matchesStatus = statusFilter === 'ALL' || task.status === statusFilter;
-      const matchesPriority = priorityFilter === 'ALL' || task.priority === priorityFilter;
-      const haystack = `${task.title} ${task.description || ''} ${task.assignee || ''}`.toLowerCase();
-      return matchesStatus && matchesPriority && (!normalizedQuery || haystack.includes(normalizedQuery));
-    });
+    return filterIncidents(tasks, { query, status: statusFilter, priority: priorityFilter });
   }, [priorityFilter, query, statusFilter, tasks]);
 
   const hasFilters = Boolean(query.trim() || statusFilter !== 'ALL' || priorityFilter !== 'ALL');
