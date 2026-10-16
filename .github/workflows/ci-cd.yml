@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the SHA-tagged images to the configured cluster
+        required: true
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -37,6 +44,37 @@ jobs:
       - name: Build frontend
         run: npm ci && npm run build
         working-directory: frontend
+
+      - name: Run frontend tests
+        run: npm test
+        working-directory: frontend
+
+  validate-infrastructure:
+    name: Validate Terraform and Helm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Validate Terraform
+        working-directory: terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform fmt -check -recursive
+          terraform validate
+
+      - uses: azure/setup-helm@v4
+
+      - name: Validate Helm chart
+        run: |
+          helm lint ./helm/taskboard
+          helm template opsdesk ./helm/taskboard \
+            --namespace opsdesk \
+            --set-string backend.image=example.invalid/opsdesk-backend \
+            --set-string frontend.image=example.invalid/opsdesk-frontend \
+            --set-string backend.tag=ci \
+            --set-string frontend.tag=ci > /tmp/opsdesk-rendered.yaml
 
   build-scan-push:
     name: Build, scan, and publish images
@@ -76,7 +114,7 @@ jobs:
         run: trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$FRONTEND_IMAGE"
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -84,15 +122,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish SHA-tagged images
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           docker push "$BACKEND_IMAGE"
           docker push "$FRONTEND_IMAGE"
 
   deploy:
     name: Deploy with Helm
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build-scan-push
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
+    needs: [build-scan-push, validate-infrastructure]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,16 +154,33 @@ jobs:
       - name: Bootstrap namespace
         run: kubectl apply -f k8s/namespace.yaml
 
+      - name: Verify cluster prerequisites
+        run: |
+          kubectl -n opsdesk get secret opsdesk-postgres
+          kubectl get crd servicemonitors.monitoring.coreos.com
+          kubectl get ingressclass nginx
+          kubectl get --raw /apis/metrics.k8s.io/v1beta1 >/dev/null
+        env:
+          GHCR_PULL_SECRET_NAME: ${{ vars.GHCR_PULL_SECRET_NAME }}
+
       - name: Deploy SHA-tagged images with Helm
         run: |
           owner="$(printf '%s' "$IMAGE_OWNER" | tr '[:upper:]' '[:lower:]')"
-          helm upgrade --install opsdesk ./helm/taskboard \
-            --namespace opsdesk \
-            --create-namespace \
-            --values ./helm/taskboard/values-prod.yaml \
-            --set-string backend.image="${REGISTRY}/${owner}/opsdesk-backend" \
-            --set-string backend.tag="$IMAGE_TAG" \
-            --set-string frontend.image="${REGISTRY}/${owner}/opsdesk-frontend" \
-            --set-string frontend.tag="$IMAGE_TAG" \
-            --wait \
+          helm_args=(
+            upgrade --install opsdesk ./helm/taskboard
+            --namespace opsdesk
+            --create-namespace
+            --values ./helm/taskboard/values-prod.yaml
+            --set-string backend.image="${REGISTRY}/${owner}/opsdesk-backend"
+            --set-string backend.tag="$IMAGE_TAG"
+            --set-string frontend.image="${REGISTRY}/${owner}/opsdesk-frontend"
+            --set-string frontend.tag="$IMAGE_TAG"
+            --wait
             --timeout 10m
+          )
+          if [ -n "${GHCR_PULL_SECRET_NAME:-}" ]; then
+            helm_args+=(--set-string "imagePullSecrets[0].name=${GHCR_PULL_SECRET_NAME}")
+          fi
+          helm "${helm_args[@]}"
+        env:
+          GHCR_PULL_SECRET_NAME: ${{ vars.GHCR_PULL_SECRET_NAME }}
