@@ -9,8 +9,7 @@ metadata:
 spec:
   project: default
   source:
-    # Replace both placeholders before applying this template.
-    repoURL: https://github.com/REPLACE_WITH_OWNER/REPLACE_WITH_REPOSITORY.git
+    repoURL: https://github.com/Akarsh1196/devsecops-csp.git
     targetRevision: main
     path: helm/taskboard
     helm:
@@ -18,13 +17,15 @@ spec:
         - values-prod.yaml
       parameters:
         - name: backend.image
-          value: ghcr.io/REPLACE_WITH_OWNER/opsdesk-backend
+          value: 992163310601.dkr.ecr.ap-south-1.amazonaws.com/opsdesk-backend
         - name: frontend.image
-          value: ghcr.io/REPLACE_WITH_OWNER/opsdesk-frontend
+          value: 992163310601.dkr.ecr.ap-south-1.amazonaws.com/opsdesk-frontend
         - name: backend.tag
-          value: REPLACE_WITH_COMMIT_SHA
+          value: live-20261017
         - name: frontend.tag
-          value: REPLACE_WITH_COMMIT_SHA
+          value: live-20261017-r2
+        - name: postgres.storageClassName
+          value: gp3
   destination:
     server: https://kubernetes.default.svc
     namespace: opsdesk

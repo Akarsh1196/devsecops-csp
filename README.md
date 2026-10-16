@@ -84,7 +84,7 @@ terraform/                  AWS VPC and EKS Terraform modules
 k8s/                        Kubernetes namespace bootstrap manifest
 helm/taskboard/             Helm chart with app, Postgres, HPA, Ingress, ServiceMonitor
 monitoring/                 Prometheus values and importable Grafana dashboard
-argocd/application.yaml     ArgoCD Application template; placeholders are intentional
+argocd/application.yaml     Configured ArgoCD Application for the live project deployment
 troubleshooting/            Broken image and broken Service exercises
 scripts/                    Load-test helper
 demo/                       Deck source, presenter walkthrough, evidence checklist
@@ -242,7 +242,7 @@ cd backend
 pytest -q
 ```
 
-The suite covers health/root, readiness/metrics, CRUD, statistics, validation boundaries, and not-found behavior. The frontend package defines a `node --test` script but does not currently contain frontend test files.
+The suite covers health/root, readiness/metrics, CRUD, statistics, validation boundaries, and not-found behavior. The frontend package also runs `node --test` against pure filtering and display-formatting behavior in `frontend/test/utils.test.js`.
 
 ## CI/CD and supply chain
 
@@ -254,9 +254,9 @@ The suite covers health/root, readiness/metrics, CRUD, statistics, validation bo
 4. Scan both local images with Trivy for HIGH and CRITICAL vulnerabilities.
 5. Fail the build when Trivy reports a matching vulnerability.
 6. On pushes, publish only commit-SHA image tags to GHCR.
-7. On pushes to `main`, optionally deploy the SHA-tagged images with Helm using the `KUBE_CONFIG_DATA` repository secret.
+7. On pushes, publish the commit-SHA image tags to GHCR. A manual `workflow_dispatch` with the `deploy` input enabled optionally deploys them with Helm using the `KUBE_CONFIG_DATA` repository secret.
 
-The workflow requires no Docker Hub credentials. GHCR publishing uses the built-in `GITHUB_TOKEN`. The deploy job requires a reachable cluster, a base64-encoded kubeconfig in `KUBE_CONFIG_DATA`, an ingress controller, and the `opsdesk-postgres` Secret.
+The workflow requires no Docker Hub credentials. GHCR publishing uses the built-in `GITHUB_TOKEN`. The deploy job requires a reachable cluster, a base64-encoded kubeconfig in `KUBE_CONFIG_DATA`, an ingress controller, Metrics Server, Prometheus Operator CRDs, and the `opsdesk-postgres` Secret. If GHCR packages are private, set the `GHCR_PULL_SECRET_NAME` repository variable to the pre-created Kubernetes pull-Secret name.
 
 ## Terraform
 
@@ -270,7 +270,7 @@ The workflow requires no Docker Hub credentials. GHCR publishing uses the built-
 | Availability zones | `ap-south-1a`, `ap-south-1b` |
 | Subnets | two public and two private `/24` ranges |
 | NAT | one NAT gateway |
-| Nodes | managed `t3.medium`, min 2 / desired 2 / max 4 |
+| Nodes | managed `t3.small` by default, min 2 / desired 4 / max 4 |
 | Kubernetes version | `1.31` in the module input |
 
 Review and validate before applying:
@@ -284,6 +284,8 @@ terraform plan
 terraform apply
 aws eks update-kubeconfig --region ap-south-1 --name opsdesk-eks
 ```
+
+The EKS configuration also manages the AWS EBS CSI add-on and grants its node role the AWS-managed EBS CSI policy. Apply [k8s/storageclass-gp3.yaml](k8s/storageclass-gp3.yaml) after the add-on is ready so PostgreSQL can bind its PVC.
 
 Destroy classroom infrastructure when finished:
 
@@ -327,6 +329,7 @@ The default chart values contain placeholder image names. A real install must se
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/storageclass-gp3.yaml
 kubectl -n opsdesk create secret generic opsdesk-postgres \
   --from-literal=database-url='postgresql+psycopg://opsdesk:opsdesk@opsdesk-postgres:5432/opsdesk' \
   --from-literal=username='opsdesk' \
@@ -353,17 +356,11 @@ helm upgrade --install opsdesk ./helm/taskboard \
   --set frontend.tag=demo
 ```
 
-`values-dev.yaml` enables the `opsdesk.local` Ingress and disables HPA. `values-prod.yaml` enables the example host `opsdesk.example.com` and HPA but still requires real image values, DNS, an Ingress controller, and a pre-created database Secret. HPA also requires Metrics Server or another resource metrics provider.
+`values-dev.yaml` enables the `opsdesk.local` Ingress and disables HPA. `values-prod.yaml` enables the example host `opsdesk.example.com`, the `gp3` PostgreSQL StorageClass, and HPA but still requires real image values, DNS, an Ingress controller, and a pre-created database Secret. HPA also requires Metrics Server or another resource metrics provider. PostgreSQL sets `PGDATA` below the mounted volume root so the EBS `lost+found` directory does not prevent first initialization.
 
 ## ArgoCD
 
-`argocd/application.yaml` is an ArgoCD Application template for the Helm chart. It is intentionally not a claim that ArgoCD is installed or synced. Before applying it, replace:
-
-- `REPLACE_WITH_OWNER/REPLACE_WITH_REPOSITORY` in `repoURL`
-- both image owner placeholders
-- both `REPLACE_WITH_COMMIT_SHA` tag values
-
-The template tracks `main`, renders `helm/taskboard`, uses `values-prod.yaml`, targets the in-cluster API server and `opsdesk` namespace, and enables automated prune/self-heal with `CreateNamespace=true`.
+`argocd/application.yaml` is the configured project Application. It tracks `main`, renders `helm/taskboard`, uses `values-prod.yaml`, targets the in-cluster API server and `opsdesk` namespace, and enables automated prune/self-heal with `CreateNamespace=true`. The current live classroom deployment uses immutable ECR tag `live-20261017-r2` for the frontend and `live-20261017` for the backend. Update those parameters for each new image release.
 
 With ArgoCD installed in a cluster:
 
@@ -505,13 +502,12 @@ Inspect the rendered Helm manifests and Application conditions for invalid repos
 
 These are current repository facts and should be explained during a demo:
 
-1. **No live evidence is included.** There is no claim here that AWS, EKS, ArgoCD, Prometheus, Grafana, or a hosted GitHub Actions run is currently available.
-2. **The CI deploy job is environment-dependent.** GHCR publishing can run with the built-in token, but Helm deployment requires `KUBE_CONFIG_DATA`, registry pull access, an ingress controller, and the external `opsdesk-postgres` Secret.
+1. **Hosted CI evidence is environment-dependent.** The repository workflow is valid and ready for a GitHub run, but this workspace cannot inspect GitHub Actions because the `gh` CLI is not installed. GHCR publishing can run with the built-in token, while Helm deployment requires `KUBE_CONFIG_DATA`, registry pull access, an ingress controller, Metrics Server, Prometheus Operator CRDs, and the external `opsdesk-postgres` Secret.
 3. **The Helm database is classroom-grade.** PostgreSQL runs in-cluster with a PVC. There is no managed RDS integration, backup policy, TLS, rotation, or high-availability database design.
 4. **Security hardening is incomplete.** There is no application authentication/authorization, network policy, production secret manager, or least-privilege review for the complete cluster path. CORS is permissive in the backend.
-5. **The ArgoCD Application is a template.** It contains repository/image/tag placeholders and is opt-in; it is not proof of GitOps synchronization.
+5. **The ArgoCD image tag is release-specific.** The Application is live and synced for the classroom ECR tag recorded above; update the tag when publishing a new image.
 6. **Dashboard labels depend on the scrape shape.** `monitoring/opsdesk-dashboard.json` assumes the standard Prometheus Operator `namespace` and `service` labels. Confirm them in Prometheus before treating panels as valid.
-7. **The frontend has no unit-test files yet.** The package has a test script, while automated behavior coverage currently comes from the backend Pytest suite and frontend production build.
+7. **Frontend test scope is intentionally small.** The package now covers pure filtering and display formatting with `node --test`; React browser interaction remains a manual/runtime check.
 
 ## Demo materials and evidence
 
@@ -521,7 +517,7 @@ These are current repository facts and should be explained during a demo:
 - [demo/walkthrough.md](demo/walkthrough.md) — presenter script with exact commands and evidence language.
 - [demo/evidence-checklist.md](demo/evidence-checklist.md) — checklist that distinguishes captured, pending, and unavailable evidence.
 - [monitoring/opsdesk-dashboard.json](monitoring/opsdesk-dashboard.json) — importable Grafana dashboard.
-- [argocd/application.yaml](argocd/application.yaml) — ArgoCD Application template with placeholders.
+- [argocd/application.yaml](argocd/application.yaml) — configured ArgoCD Application for the project deployment.
 
 The PowerPoint deck is generated from the Markdown source and validated as an OOXML archive. The mandatory walkthrough video still must be recorded separately after live CI, infrastructure, Kubernetes, ArgoCD, Prometheus, and Grafana evidence has been captured.
 

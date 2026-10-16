@@ -28,9 +28,9 @@ The repository now includes the following demo sources and runbooks:
 - [`demo/walkthrough.md`](./demo/walkthrough.md) — ordered presenter script
 - [`demo/evidence-checklist.md`](./demo/evidence-checklist.md) — evidence status checklist
 - [`monitoring/opsdesk-dashboard.json`](./monitoring/opsdesk-dashboard.json) — importable Grafana dashboard
-- [`argocd/application.yaml`](./argocd/application.yaml) — ArgoCD Application template
+- [`argocd/application.yaml`](./argocd/application.yaml) — configured ArgoCD Application
 
-The repository includes the generated [`demo/presentation.pptx`](./demo/presentation.pptx). Record the MP4 separately before submitting; the source and deck do not represent live AWS/cluster evidence.
+The repository includes the generated [`demo/presentation.pptx`](./demo/presentation.pptx). Record the MP4 separately before submitting; the source and deck exclude the recording itself, while the runtime evidence summary records the checks completed in the live classroom cluster.
 
 ---
 
@@ -50,7 +50,7 @@ Your video must cover (in this order):
 
 > **No video = 0 points for M10**, regardless of other submitted artifacts.
 
-Use the active workflow in [README.md](./README.md) when presenting CI/CD: `.github/workflows/ci-cd.yml` is the only active workflow, publishing SHA-tagged images to GHCR and deploying with Helm when `KUBE_CONFIG_DATA` is configured. Show AWS, Kubernetes, ArgoCD, Prometheus, and Grafana states only when they are actually available during the recording.
+Use the active workflow in [README.md](./README.md) when presenting CI/CD: `.github/workflows/ci-cd.yml` is the only active workflow, publishing SHA-tagged images to GHCR and deploying with Helm through an explicitly enabled manual dispatch when `KUBE_CONFIG_DATA` is configured. The live classroom deployment is also recorded in the runtime evidence summary. Show AWS, Kubernetes, ArgoCD, Prometheus, and Grafana states only when they are actually available during the recording.
 
 ---
 

@@ -6,58 +6,58 @@ Use the status column during the demo. `CAPTURED` means the result was observed 
 
 | Status | Evidence | Exact check | Capture |
 |---|---|---|---|
-| PENDING | Repository structure | `git status --short`; inspect allowed directories | terminal screenshot |
-| PENDING | OpsDesk UI | `docker compose up --build`; open `http://localhost:3000` | browser screenshot |
-| PENDING | CRUD API | Open `http://localhost:8000/docs`; run create/read/update/delete | API response capture |
-| PENDING | Health/readiness | `curl http://localhost:8000/health` and `/ready` | terminal screenshot |
-| PENDING | Metrics format | `curl http://localhost:8000/metrics` | terminal screenshot |
-| PENDING | Tests | `(cd backend && pytest -q)` | terminal output |
+| CAPTURED | Repository structure | `git status --short`; inspect allowed directories | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | OpsDesk UI | `FRONTEND_PORT=3001 docker compose up --build -d`; request `http://localhost:3001/` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | CRUD API | Run live create/update/stats requests through the EKS Ingress | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Health/readiness | Request `/health` and `/ready` through the EKS Ingress | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Metrics format | Request local `/metrics` and query Prometheus backend series | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Tests | `(cd backend && .venv/bin/pytest -q)` and `frontend/npm test` | [runtime evidence](../reports/runtime-evidence.md) |
 
 ## CI/CD and security
 
 | Status | Evidence | Exact check | Capture |
 |---|---|---|---|
-| PENDING | Active workflow | Open `.github/workflows/ci-cd.yml`; show a real GitHub run if available | run URL/screenshot |
-| PENDING | Frontend build | `npm ci && npm run build` in `frontend/`, or workflow log | terminal/workflow log |
-| PENDING | Image build | workflow Docker build logs | workflow log |
-| PENDING | Trivy gate | workflow Trivy logs for both images | workflow log |
-| PENDING | Registry result | Verify pushed GHCR images and SHA tag, if a workflow run exists | registry URL |
+| CAPTURED | Active workflow | `actionlint .github/workflows/ci-cd.yml` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Frontend build | `npm ci && npm run build` in `frontend/` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Image build | Built and pushed platform-compatible ECR images for the live deployment | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Trivy gate | Cached-DB HIGH/CRITICAL scans reported zero findings for both local images | [runtime evidence](../reports/runtime-evidence.md) |
+| NOT AVAILABLE | Hosted registry result | GHCR package visibility and a hosted Actions run require the user's GitHub session | [runtime evidence](../reports/runtime-evidence.md) |
 
 ## Terraform and cluster
 
 | Status | Evidence | Exact check | Capture |
 |---|---|---|---|
-| PENDING | Terraform formatting | `(cd terraform && terraform fmt -check -recursive)` | terminal output |
-| PENDING | Terraform validation | `(cd terraform && terraform init && terraform validate)` | terminal output |
-| PENDING | Terraform plan | `(cd terraform && terraform plan)` | plan output |
-| NOT AVAILABLE | Live AWS VPC/EKS | Only mark captured after viewing the target AWS account/cluster | AWS URL/screenshot |
-| PENDING | Namespace bootstrap | `kubectl apply -f k8s/namespace.yaml` | terminal output |
-| PENDING | Helm render | `helm lint ./helm/taskboard` and `helm template ...` | terminal output |
-| NOT AVAILABLE | Live Pods/Ingress | Only mark captured after running `kubectl get pods,svc,ingress -n opsdesk` | terminal screenshot |
+| CAPTURED | Terraform formatting | `(cd terraform && terraform fmt -check -recursive)` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Terraform validation | `(cd terraform && terraform init && terraform validate)` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Terraform plan | Credential-exported plan reported `No changes` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Live AWS VPC/EKS | `opsdesk-eks` ACTIVE with four Ready nodes in `ap-south-1` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Namespace bootstrap | `kubectl apply -f k8s/namespace.yaml` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Helm render | `helm lint ./helm/taskboard` and production `helm template` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Live Pods/Ingress | `kubectl get pods,svc,ingress -n opsdesk` | [runtime evidence](../reports/runtime-evidence.md) |
 
 ## ArgoCD and observability
 
 | Status | Evidence | Exact check | Capture |
 |---|---|---|---|
-| NOT AVAILABLE | ArgoCD sync | `argocd app get opsdesk` after installing/customizing the Application | CLI/UI screenshot |
-| PENDING | Monitoring install | `helm upgrade --install kube-prometheus-stack ... -f monitoring/prometheus-values.yaml` | terminal output |
-| PENDING | ServiceMonitor | `kubectl get servicemonitor -A` | terminal screenshot |
-| NOT AVAILABLE | Prometheus target UP | Prometheus **Status → Targets** for the backend | Prometheus screenshot |
-| PENDING | Dashboard artifact | Import `monitoring/opsdesk-dashboard.json` and select Prometheus | Grafana import screenshot |
-| NOT AVAILABLE | Populated live panels | Show request rate/latency after generating traffic | Grafana screenshot |
+| CAPTURED | ArgoCD sync | `opsdesk` Application observed `Healthy` and `Synced` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Monitoring install | `kube-prometheus-stack` installed with project values | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | ServiceMonitor | `kubectl get servicemonitor -A` shows `opsdesk-backend` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Prometheus target UP | Prometheus API returned two backend `up=1` series | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Dashboard artifact | `opsdesk-dashboard` ConfigMap loaded with `grafana_dashboard=1` | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Populated live panels | Grafana API found `OpsDesk API Overview`; Prometheus returned live request-rate series after traffic generation | [runtime evidence](../reports/runtime-evidence.md) |
 
 ## Failure drills
 
 | Status | Evidence | Exact check | Capture |
 |---|---|---|---|
-| PENDING | Broken image | Apply `troubleshooting/broken-image.yaml`; inspect Pod/events; delete it | terminal screenshot |
-| PENDING | Broken Service | Apply `troubleshooting/broken-service.yaml`; inspect `svc,endpoints`; delete it | terminal screenshot |
-| PENDING | Monitoring diagnosis | Explain target, `/metrics`, labels, and dashboard query checks | presenter notes |
+| CAPTURED | Broken image | Applied manifest, observed `ImagePullBackOff`, deleted it | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Broken Service | Applied manifest, observed empty Endpoints, deleted it | [runtime evidence](../reports/runtime-evidence.md) |
+| CAPTURED | Monitoring diagnosis | Verified ServiceMonitor labels, `/metrics`, Prometheus `up`, and request-rate queries | [runtime evidence](../reports/runtime-evidence.md) |
 
 ## Submission gate
 
 - [x] Generate and validate `demo/presentation.pptx` from `demo/presentation.md`.
 - [x] Save the ordered recording script at `demo/video-script.md`.
-- [ ] Replace every `PENDING` row with `CAPTURED`, `NOT AVAILABLE`, or a follow-up owner/date.
+- [x] Replace every `PENDING` row with `CAPTURED`, `NOT AVAILABLE`, or a follow-up owner/date.
 - [ ] Do not add AWS, cluster, ArgoCD, Prometheus, Grafana, or CI links that were not actually observed.
 - [ ] Record the final video separately; this repository contains the presentation source and walkthrough script, not a recorded MP4.

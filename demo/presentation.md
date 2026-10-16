@@ -108,7 +108,7 @@ AWS VPC 10.20.0.0/16
   ├── two private subnets
   ├── single NAT gateway
   └── EKS opsdesk-eks
-        └── managed t3.medium node group, desired size 2
+         └── managed t3.small node group, desired size 4
 ```
 
 ```bash
@@ -120,7 +120,7 @@ terraform apply
 aws eks update-kubeconfig --region ap-south-1 --name opsdesk-eks
 ```
 
-**Evidence placeholder:** plan/AWS Console capture, only if actually provisioned. No live AWS evidence is included in this repository.
+**Observed live evidence:** Terraform reported no changes after refresh; the `opsdesk-eks` cluster is ACTIVE in `ap-south-1` with four Ready `t3.small` nodes and the AWS EBS CSI add-on.
 
 ---
 
@@ -129,7 +129,7 @@ aws eks update-kubeconfig --region ap-south-1 --name opsdesk-eks
 - `k8s/` contains the namespace bootstrap manifest; Helm owns the application resources.
 - `helm/taskboard` packages frontend, backend, PostgreSQL/PVC, optional Ingress, HPA, and ServiceMonitor.
 - `values-dev.yaml` enables `opsdesk.local` Ingress and disables HPA.
-- `values-prod.yaml` enables Ingress/HPA but still needs real image names, a real host, and the external database Secret.
+- `values-prod.yaml` enables Ingress/HPA, uses the `gp3` StorageClass, and requires the external database Secret plus a reachable image registry.
 
 ```bash
 helm lint ./helm/taskboard
@@ -140,7 +140,7 @@ helm template opsdesk ./helm/taskboard -n opsdesk
 
 ## Slide 9 — ArgoCD GitOps path
 
-`argocd/application.yaml` is a reviewable Application template:
+`argocd/application.yaml` is the configured project Application:
 
 ```text
 Git main branch
@@ -152,11 +152,11 @@ ArgoCD Application
 opsdesk namespace
 ```
 
-- Replace repository, owner, and image/tag placeholders before applying.
+- The current live release points at the project repository and immutable ECR image tags.
 - `automated.prune` and `selfHeal` are enabled in the template.
-- The manifest is not proof that ArgoCD is installed or synced.
+- The live Application was observed as `Synced` and `Healthy` after deployment.
 
-**Evidence placeholder:** `argocd app get opsdesk` showing Synced/Healthy after a real deployment.
+**Observed live evidence:** `kubectl -n argocd get application opsdesk` reported `Healthy Synced`.
 
 ---
 
@@ -172,7 +172,7 @@ kubectl get servicemonitor -A
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
 ```
 
-**Evidence placeholder:** Prometheus target `UP` and populated Grafana panels after generating traffic.
+**Observed live evidence:** Prometheus returned `up{namespace="opsdesk",service="opsdesk-backend"}` for both backend Pods, and the dashboard ConfigMap was loaded for the Grafana sidecar.
 
 ---
 
@@ -187,7 +187,7 @@ Failure drills:
 Known limitations:
 
 - No authentication, authorization, production secret management, or managed RDS integration
-- GHCR publishing, Helm deployment, and ArgoCD synchronization require external credentials and cluster access
-- No live AWS, Kubernetes, ArgoCD, Prometheus, or Grafana evidence is claimed here
+- Hosted GitHub Actions evidence still requires a user-run workflow; the live classroom deployment uses ECR because GHCR packages are private.
+- PostgreSQL remains classroom-grade in-cluster storage without backup/HA or managed RDS.
 
 **Close:** use the evidence checklist to turn each intended check into a captured result.

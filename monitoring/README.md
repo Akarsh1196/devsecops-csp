@@ -1,6 +1,6 @@
 # OpsDesk monitoring artifacts
 
-This directory contains configuration for the `kube-prometheus-stack` chart and an importable Grafana dashboard. It describes a repeatable monitoring setup; it does not prove that a Prometheus or Grafana instance is currently running.
+This directory contains configuration for the `kube-prometheus-stack` chart and an importable Grafana dashboard. The live classroom EKS project has this stack installed and the runtime result is recorded in [reports/runtime-evidence.md](../reports/runtime-evidence.md).
 
 ## Install Prometheus and Grafana
 
@@ -23,6 +23,7 @@ Install `helm/taskboard` in the `opsdesk` namespace with image values that exist
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/storageclass-gp3.yaml
 kubectl create secret generic opsdesk-postgres \
   --namespace opsdesk \
   --from-literal=database-url='postgresql+psycopg://opsdesk:opsdesk@opsdesk-postgres:5432/opsdesk' \
@@ -32,10 +33,10 @@ helm upgrade --install opsdesk ./helm/taskboard \
   --namespace opsdesk \
   --create-namespace \
   --values ./helm/taskboard/values-prod.yaml \
-  --set backend.image=ghcr.io/REPLACE_WITH_OWNER/opsdesk-backend \
-  --set frontend.image=ghcr.io/REPLACE_WITH_OWNER/opsdesk-frontend \
-  --set backend.tag=REPLACE_WITH_COMMIT_SHA \
-  --set frontend.tag=REPLACE_WITH_COMMIT_SHA
+   --set backend.image=992163310601.dkr.ecr.ap-south-1.amazonaws.com/opsdesk-backend \
+   --set frontend.image=992163310601.dkr.ecr.ap-south-1.amazonaws.com/opsdesk-frontend \
+   --set backend.tag=live-20261017 \
+   --set frontend.tag=live-20261017-r2
 ```
 
 Verify the target configuration:
