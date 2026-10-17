@@ -12,11 +12,11 @@ This repository demonstrates the configuration and runbooks for a DevSecOps caps
 - GitHub Actions, Docker image builds, and Trivy scanning
 - Terraform definitions for an AWS VPC and EKS cluster
 - Kubernetes manifests and a Helm chart
-- ArgoCD Application template for an optional GitOps path
+- Configured ArgoCD Application for the live classroom GitOps path
 - Prometheus/Grafana monitoring values and a dashboard artifact
 - Deliberately broken Kubernetes manifests for troubleshooting practice
 
-The repository contains repeatable configuration and documentation. It does **not** claim that AWS, a Kubernetes cluster, ArgoCD, Prometheus, Grafana, or a successful hosted CI run is currently live. Capture actual runtime evidence using [demo/evidence-checklist.md](demo/evidence-checklist.md).
+The repository contains repeatable configuration, documentation, and a runtime evidence summary for the classroom EKS deployment verified on 17 October 2026. Hosted GitHub Actions completion is not claimed because it was not inspected from this workspace; use [demo/evidence-checklist.md](demo/evidence-checklist.md) and [reports/runtime-evidence.md](reports/runtime-evidence.md) for the observed results.
 
 ## Contents
 
@@ -512,13 +512,22 @@ These are current repository facts and should be explained during a demo:
 ## Demo materials and evidence
 
 - [demo/presentation.md](demo/presentation.md) — title slide plus 11 content-slide source covering the app, architecture, CI/CD, Terraform, Kubernetes/Helm, ArgoCD, observability, and limitations.
-- [demo/presentation.pptx](demo/presentation.pptx) — generated PowerPoint deck with a title slide plus 11 content slides.
+- [demo/presentation.pptx](demo/presentation.pptx) — styled PowerPoint deck with a title slide plus 11 content slides.
+- [scripts/style_presentation.py](scripts/style_presentation.py) — repeatable OOXML styling pass used after Pandoc generation.
 - [demo/video-script.md](demo/video-script.md) — complete ordered recording script for the mandatory walkthrough video.
 - [demo/walkthrough.md](demo/walkthrough.md) — presenter script with exact commands and evidence language.
 - [demo/evidence-checklist.md](demo/evidence-checklist.md) — checklist that distinguishes captured, pending, and unavailable evidence.
 - [monitoring/opsdesk-dashboard.json](monitoring/opsdesk-dashboard.json) — importable Grafana dashboard.
 - [argocd/application.yaml](argocd/application.yaml) — configured ArgoCD Application for the project deployment.
 
-The PowerPoint deck is generated from the Markdown source and validated as an OOXML archive. The mandatory walkthrough video still must be recorded separately after live CI, infrastructure, Kubernetes, ArgoCD, Prometheus, and Grafana evidence has been captured.
+Regenerate the styled deck with:
+
+```bash
+pandoc demo/presentation.md -o /tmp/opsdesk-presentation-unstyled.pptx --slide-level=2
+python scripts/style_presentation.py /tmp/opsdesk-presentation-unstyled.pptx demo/presentation.pptx
+unzip -t demo/presentation.pptx
+```
+
+The PowerPoint deck is generated from the Markdown source, styled with the repository script, and validated as an OOXML archive. The mandatory walkthrough video still must be recorded separately after live CI, infrastructure, Kubernetes, ArgoCD, Prometheus, and Grafana evidence has been captured.
 
 For the complete ordered demo flow, start with `demo/presentation.md`, then follow `demo/walkthrough.md`, and finish by marking every row in `demo/evidence-checklist.md` honestly.

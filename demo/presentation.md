@@ -1,16 +1,28 @@
-# OpsDesk DevSecOps capstone — presentation deck source
+---
+title: "OpsDesk: from code to observable operations"
+subtitle: "DevSecOps capstone"
+author: "OpsDesk platform team"
+date: "17 October 2026"
+---
 
-This Markdown file is the source for the generated `presentation.pptx` deck: a title slide plus 11 content slides. Regenerate it with Pandoc when the source changes, then record the walkthrough separately. Every runtime claim in the slides is phrased as an intended check; replace the evidence placeholders with screenshots or links only after running the commands in `demo/evidence-checklist.md`.
+<!-- Source note: this deck summarizes the implemented OpsDesk platform and the live classroom deployment verified on 17 October 2026. -->
 
 ---
 
-## Slide 1 — OpsDesk: from code to observable operations
+## Slide 1 — Platform at a glance
 
 **DevSecOps capstone**
 
 - Incident/work-item dashboard for an operations team
 - React + FastAPI + PostgreSQL
 - CI/CD, containers, Terraform, Kubernetes, Helm, ArgoCD, Prometheus, and Grafana artifacts
+- Delivery path verified from local Compose through a live EKS deployment
+
+**Technology stack**
+
+- **Frontend:** React 18, Vite, Node.js 22, Nginx
+- **Backend:** Python 3.12, FastAPI, SQLAlchemy, Pydantic, Alembic, Pytest
+- **Platform:** Docker Compose, GitHub Actions, Trivy, Terraform, AWS EKS, Kubernetes, Helm, ArgoCD, Prometheus, Grafana
 
 **Presenter note:** The repository is named `devsecops-csp`; the product presented by the current frontend and API is OpsDesk.
 
@@ -24,7 +36,7 @@ This Markdown file is the source for the generated `presentation.pptx` deck: a t
 - Read summary statistics from the API
 - Use `/health`, `/ready`, and `/metrics` for operational checks
 
-**Evidence placeholder:** browser capture of the running OpsDesk UI.
+**Verified outcome:** the live Ingress served the React application, and the API smoke flow created incident `1`, moved it to `IN_PROGRESS`, and returned updated statistics.
 
 ---
 
@@ -32,7 +44,7 @@ This Markdown file is the source for the generated `presentation.pptx` deck: a t
 
 ```text
 Browser
-  │  http://localhost:3000 or Ingress /
+  │  local port 3001 or AWS NGINX Ingress /
   ▼
 React static site + Nginx
   │  /api/*
@@ -46,9 +58,9 @@ Prometheus ◄── ServiceMonitor ── Kubernetes Service
 Grafana dashboard
 ```
 
-- Docker Compose is the local three-service path.
-- Helm packages the cluster path and includes PostgreSQL, HPA, Ingress, and ServiceMonitor templates.
-- Terraform describes the AWS VPC and EKS foundation.
+- Docker Compose is the local three-service path; it was verified with PostgreSQL, backend, and frontend containers.
+- Helm packages the cluster path and includes PostgreSQL/PVC, HPA, Ingress, and ServiceMonitor resources.
+- Terraform manages the AWS VPC, EKS cluster, managed nodes, EBS CSI add-on, and supporting IAM.
 
 ---
 
@@ -69,22 +81,24 @@ GET    /api/incidents/stats
 - Pydantic validates titles, statuses, priorities, and update payloads.
 - `/api/work-items` remains as a hidden compatibility alias.
 
-**Evidence placeholder:** `/docs`, a CRUD request, and `curl /metrics` output.
+**Verified API flow:** `/health` returned `UP`, `/ready` returned `READY`, the live CRUD smoke test succeeded, and Prometheus scraped both backend Pods.
 
 ---
 
 ## Slide 5 — Local developer workflow
 
 ```bash
-docker compose up --build
-open http://localhost:3000
-open http://localhost:8000/docs
+FRONTEND_PORT=3001 docker compose up --build -d
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
+curl http://localhost:3001/
 docker compose down
 ```
 
 - Compose starts Postgres, the FastAPI backend, and Nginx-served frontend.
-- The Compose database uses the `opsdesk` database/user/password values in `docker-compose.yml`.
-- The direct backend path uses an explicitly supplied `DATABASE_URL` and Alembic.
+- The Compose database uses the development `opsdesk` database/user/password values in `docker-compose.yml`.
+- The backend container runs Alembic migrations before serving traffic.
+- The local smoke check completed successfully; the frontend was mapped to port `3001` because port `3000` was already in use.
 
 ---
 
@@ -92,11 +106,17 @@ docker compose down
 
 **Active workflow:** `.github/workflows/ci-cd.yml`
 
-1. Pytest and frontend build
-2. Build backend/frontend images
-3. Trivy HIGH/CRITICAL scan with `exit-code: 1`
-4. Push SHA-tagged images to GHCR
-5. On `main`, optionally deploy the SHA-tagged images with Helm using `KUBE_CONFIG_DATA`
+1. Runs on pushes and pull requests targeting `main`
+2. Backend Pytest, frontend tests, and frontend production build
+3. Terraform format/validation and Helm lint/render validation
+4. Builds backend/frontend images
+5. Trivy HIGH/CRITICAL scan with `exit-code: 1`
+6. Pushes commit-SHA-tagged images to GHCR
+7. Optional manual deployment with `workflow_dispatch`, prerequisite checks, and Helm
+
+**Verified locally:** `actionlint` passed, frontend tests reported `3 passed`,
+backend tests reported `9 passed`, and the local cached-DB Trivy scans reported
+zero HIGH/CRITICAL findings for both images.
 
 ---
 
@@ -111,30 +131,34 @@ AWS VPC 10.20.0.0/16
          └── managed t3.small node group, desired size 4
 ```
 
-```bash
-cd terraform
-terraform init
-terraform validate
-terraform plan
-terraform apply
-aws eks update-kubeconfig --region ap-south-1 --name opsdesk-eks
+```text
+Initial plan:   non-empty → apply succeeded
+Steady-state:   No changes
+Cluster:        opsdesk-eks / ACTIVE / Kubernetes 1.31
+Region:         ap-south-1
+Workers:        4 x t3.small / Ready
+Storage:        AWS EBS CSI + default gp3 StorageClass
 ```
 
-**Observed live evidence:** Terraform reported no changes after refresh; the `opsdesk-eks` cluster is ACTIVE in `ap-south-1` with four Ready `t3.small` nodes and the AWS EBS CSI add-on.
+**Observed live evidence:** the initial provisioning plan was non-empty and applied successfully; the steady-state refresh later reported `No changes`. The `opsdesk-eks` cluster is ACTIVE in `ap-south-1` with four Ready `t3.small` nodes and the AWS EBS CSI add-on.
 
 ---
 
 ## Slide 8 — Kubernetes and Helm
 
-- `k8s/` contains the namespace bootstrap manifest; Helm owns the application resources.
-- `helm/taskboard` packages frontend, backend, PostgreSQL/PVC, optional Ingress, HPA, and ServiceMonitor.
-- `values-dev.yaml` enables `opsdesk.local` Ingress and disables HPA.
-- `values-prod.yaml` enables Ingress/HPA, uses the `gp3` StorageClass, and requires the external database Secret plus a reachable image registry.
+- `k8s/` contains the namespace and `gp3` StorageClass bootstrap manifests; Helm owns the application resources.
+- `helm/taskboard` packages frontend, backend, PostgreSQL/PVC, Ingress, HPA, and ServiceMonitor.
+- Production deployment is running with 2 backend Pods, 2 frontend Pods, 1 PostgreSQL Pod, a Bound 5 GiB PVC, and an AWS load balancer.
+- Backend and frontend are exposed internally through ClusterIP Services; the NGINX Ingress routes `/` to frontend and `/api` to backend.
+- `helm upgrade --install` completed successfully and all application Pods reached `Running`.
+- The PostgreSQL chart sets `PGDATA` below the mounted volume root so a fresh EBS filesystem can initialize correctly.
 
 ```bash
 helm lint ./helm/taskboard
 helm template opsdesk ./helm/taskboard -n opsdesk
 ```
+
+**Verified:** Helm lint and production rendering passed.
 
 ---
 
@@ -153,10 +177,10 @@ opsdesk namespace
 ```
 
 - The current live release points at the project repository and immutable ECR image tags.
-- `automated.prune` and `selfHeal` are enabled in the template.
+- `automated.prune` and `selfHeal` are enabled in the Application manifest.
 - The live Application was observed as `Synced` and `Healthy` after deployment.
 
-**Observed live evidence:** `kubectl -n argocd get application opsdesk` reported `Healthy Synced`.
+**Observed live evidence:** `kubectl -n argocd get application opsdesk` reported `Healthy Synced`. The Application tracks `Akarsh1196/devsecops-csp` and reconciles the `main` branch into the `opsdesk` namespace.
 
 ---
 
@@ -166,13 +190,14 @@ opsdesk namespace
 - The Helm ServiceMonitor scrapes the backend every 15 seconds.
 - `monitoring/prometheus-values.yaml` enables Grafana and cross-namespace ServiceMonitor discovery.
 - `monitoring/opsdesk-dashboard.json` includes request rate, 5xx rate, p95 latency, status mix, and scrape health panels.
+- The dashboard is provisioned as `OpsDesk API Overview` with Grafana UID `opsdesk-api-overview`.
 
 ```bash
 kubectl get servicemonitor -A
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
 ```
 
-**Observed live evidence:** Prometheus returned `up{namespace="opsdesk",service="opsdesk-backend"}` for both backend Pods, and the dashboard ConfigMap was loaded for the Grafana sidecar.
+**Observed live evidence:** Prometheus returned `up{namespace="opsdesk",service="opsdesk-backend"}=1` for both backend Pods, and request-rate series were present for health, readiness, metrics, list, create, update, and stats endpoints.
 
 ---
 
@@ -184,10 +209,17 @@ Failure drills:
 - Broken selector → empty Endpoints → compare Service selector with Pod labels
 - Empty dashboard → inspect target health, metric names, and scrape labels
 
+Key learnings:
+
+- Infrastructure as Code creates the foundation; GitOps continuously reconciles application state.
+- Readiness probes express dependency health, while liveness probes protect process health.
+- Immutable image tags plus scan gates make each release traceable and safer to promote.
+- Service selectors, ServiceMonitor labels, and PromQL queries are the first checkpoints when debugging an empty dashboard.
+
 Known limitations:
 
 - No authentication, authorization, production secret management, or managed RDS integration
 - Hosted GitHub Actions evidence still requires a user-run workflow; the live classroom deployment uses ECR because GHCR packages are private.
 - PostgreSQL remains classroom-grade in-cluster storage without backup/HA or managed RDS.
 
-**Close:** use the evidence checklist to turn each intended check into a captured result.
+**Close:** OpsDesk is implemented, containerized, scanned, deployed to EKS, synchronized by ArgoCD, and observable through Prometheus/Grafana. The only remaining submission artifact is the separately recorded walkthrough video.
